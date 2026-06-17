@@ -1,14 +1,25 @@
-import express from "express";
-import UsersControllers from "../controllers/users.js";
+import express from 'express'
+import UsersControllers from '../controllers/users.js'
 
-const router = express.Router();
+const usersRouter = express.Router()
+const usersControllers = new UsersControllers()
 
-const usersController = new UsersControllers();
+usersRouter.get('/', async (req, res) => {
+    const { body, success, statusCode } = await usersControllers.getUsers()
 
-router.get("/", usersController.getUsers);
+    res.status(statusCode).send({ body, success, statusCode })
+})
 
-router.delete("/:id", usersController.deleteUser);
+usersRouter.delete('/:id', async (req, res) => {
+    const { body, success, statusCode } = await usersControllers.deleteUser(req.params.id)
 
-router.put("/:id", usersController.updateUser);
+    res.status(statusCode).send({ body, success, statusCode })
+})
 
-export default router;
+usersRouter.put('/:id', async (req, res) => {
+    const { body, success, statusCode } = await usersControllers.updateUser(req.params.id, req.body)
+
+    res.status(statusCode).send({ body, success, statusCode })
+})
+
+export default usersRouter 

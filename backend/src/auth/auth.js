@@ -1,221 +1,134 @@
-// Autenticação!
-import express from "express";
-import passport from "passport";
-import localStrategy from "passport-local";
-import crypto from "crypto";
-import { Mongo } from "../database/mongo.js";
-import jwt from "jsonwebtoken";
-import { ObjectId } from "mongodb";
-import { error } from "console";
-import { text } from "stream/consumers";
+import express from "express"
+import passport from 'passport'
+import LocalStrategy from 'passport-local'
+import crypto from 'crypto'
+import jwt from 'jsonwebtoken'
+import { Mongo } from "../database/mongo.js"
+import { ObjectId } from 'mongodb'
 
-//
-// Registro do usuário
-//
-const collectionName = "users";
+const collectionName = 'users'
 
-// Estratégia de Login do Passport
-passport.use(
-  new localStrategy(
-    { usernameField: "email" },
-    async (email, password, callback) => {
-      try {
-        const user = await Mongo.db
-          .collection(collectionName)
-          .findOne({ email: email });
+const authRouter = express.Router()
 
-        if (!user) {
-          return callback(null, false, { message: "Usuário não encontrado." });
+passport.use(new LocalStrategy({ usernameField: 'email' }, async (email, password, callback) => {
+    const user = await Mongo.db
+    .collection(collectionName)
+    .findOne({ email: email })
+
+    if(!user) {
+        return callback(null, false)
+    }
+
+    const saltBuffer = user.salt.buffer
+
+    crypto.pbkdf2(password, saltBuffer, 310000, 16, 'sha256', (error, hashedPassword) => {
+        if(error) {
+            return callback(error)
         }
 
-        // Garante que estamos lidando com buffers corretos vindos do MongoDB
-        const saltBuffer = Buffer.isBuffer(user.salt)
-          ? user.salt
-          : Buffer.from(user.salt.buffer || user.salt);
-        const userPasswordBuffer = Buffer.isBuffer(user.password)
-          ? user.password
-          : Buffer.from(user.password.buffer || user.password);
+        const userPassowrdBuffer = Buffer.from(user.password.buffer)
 
-        crypto.pbkdf2(
-          password,
-          saltBuffer,
-          310000,
-          16,
-          "sha256",
-          (err, hashedPassword) => {
-            if (err) {
-              return callback(err, false);
-            }
+        if(!crypto.timingSafeEqual(userPassowrdBuffer, hashedPassword)) {
+            return callback(null, false)
+        }
 
-            if (!crypto.timingSafeEqual(userPasswordBuffer, hashedPassword)) {
-              return callback(null, false, { message: "Senha incorreta." });
-            }
+        const { password, salt, ...rest } = user
 
-            // Remove campos sensíveis antes de retornar
-            const { password: _, salt: __, ...rest } = user;
-            return callback(null, rest);
-          },
-        );
-      } catch (error) {
-        return callback(error, false);
-      }
-    },
-  ),
-);
+        return callback(null, rest)
+    })
+}))
 
-// Rota
-const authRouter = express.Router();
-
-authRouter.post("/signup", async (req, res) => {
-  try {
-    // Proteção contra requisições sem body (Evita o crash de undefined)
-    if (!req.body || !req.body.email || !req.body.password) {
-      return res.status(400).send({
-        success: false,
-        statusCode: 400,
-        body: { text: "E-mail e senha são obrigatórios!" },
-      });
-    }
-
-    const { email, password } = req.body;
-
-    // Verificar se usuário já existe
+authRouter.post('/signup', async(req, res) => {
     const checkUser = await Mongo.db
-      .collection(collectionName)
-      .findOne({ email: email });
+    .collection(collectionName)
+    .findOne({ email: req.body.email })
 
-    if (checkUser) {
-      return res.status(400).send({
-        success: false,
-        statusCode: 400,
-        body: { text: "User already exists!!!" },
-      });
-    }
-
-    // Gerar Salt e Hash da senha
-    const salt = crypto.randomBytes(16);
-
-    crypto.pbkdf2(
-      password,
-      salt,
-      310000,
-      16,
-      "sha256",
-      async (err, hashedPassword) => {
-        if (err) {
-          return res.status(500).send({
+    if(checkUser) {
+        return res.status(500).send({
             success: false,
             statusCode: 500,
             body: {
-              text: "Error on crypto password!!!",
-              err: err.message,
-            },
-          });
+                text: 'User already exists'
+            }
+        })
+    }
+
+    const salt = crypto.randomBytes(16)
+    
+    crypto.pbkdf2(req.body.password, salt, 310000, 16, 'sha256', async (error, hashedPassword) => {
+        if(error) {
+            res.status(500).send({
+                success: false,
+                statusCode: 500,
+                body: {
+                    text: 'User already exists'
+                }
+            })
         }
 
-        // Salvar no banco de dados
-        const result = await Mongo.db.collection(collectionName).insertOne({
-          email: email,
-          password: hashedPassword,
-          salt: salt,
-        });
+        const result = await Mongo.db
+        .collection(collectionName)
+        .insertOne({
+            fullname: req.body.fullname,
+            email: req.body.email,
+            password: hashedPassword,
+            salt,
+        })
 
-        if (result.insertedId) {
-          const user = await Mongo.db
+        if(result.insertedId) {
+            const user = await Mongo.db
             .collection(collectionName)
-            .findOne({ _id: new ObjectId(result.insertedId) });
+            .findOne({ _id: new ObjectId(result.insertedId) }, { projection: { password: 0, salt: 0 } })
 
-          // CORRIGIDO: O JWT não aceita bem instâncias de ObjectId e Buffers complexos.
-          // É melhor assinar apenas dados simples, como o ID e o email.
-          const payload = {
-            id: user._id.toString(),
-            email: user.email,
-          };
+            const token = jwt.sign(user, 'secret')
 
-          const token = jwt.sign(payload, "secret", { expiresIn: "1d" });
-
-          delete user.password;
-          delete user.salt;
-
-          return res.status(201).send({
-            success: true,
-            statusCode: 201,
-            body: {
-              text: "User registered correctly!!!",
-              token,
-              user,
-              logged: true,
-            },
-          });
+            return res.send({
+                success: true,
+                statusCode: 200,
+                body: {
+                    text: 'User registered',
+                    user,
+                    token
+                }
+            })
         }
-      },
-    );
-  } catch (error) {
-    return res.status(500).send({
-      success: false,
-      statusCode: 500,
-      body: { text: "Internal Server Error", error: error.message },
-    });
-  }
-});
+    })
+})
 
-//
-// Login
-//
-authRouter.post("/login", (req, res, next) => {
-  passport.authenticate("local", { session: false }, (error, user, info) => {
-    // Tratamento de erro do servidor/banco
-    if (error) {
-      return res.status(500).send({
-        success: false,
-        statusCode: 500,
-        body: {
-          text: "Error during authentication!!!",
-          error: error.message,
-        },
-      });
-    }
+authRouter.post('/login', (req, res) => {
+    passport.authenticate('local', (error, user) => {
+        if(error) {
+            return res.status(500).send({
+                success: false,
+                statusCode: 500,
+                body: {
+                    text: 'Error during authentication',
+                    error
+                }
+            })
+        }
 
-    // Se o usuário não foi encontrado ou a senha está errada
-    if (!user) {
-      return res.status(401).send({
-        // Mudado para 401 (Unauthorized) que é o correto para falha de login
-        success: false,
-        statusCode: 401,
-        body: {
-          text:
-            info && info.message
-              ? info.message
-              : "Invalid email or password!!!",
-        },
-      });
-    }
+        if(!user) {
+            return res.status(400).send({
+                success: false,
+                statusCode: 400,
+                body: {
+                    text: 'Credentials are not correct',
+                }
+            })  
+        }
 
-    // Simplificando o payload do JWT para evitar quebra com Objetos complexos do Mongo
-    const payload = {
-      id: user._id.toString(),
-      email: user.email,
-    };
+        const token = jwt.sign(user, 'secret')
+        return res.status(200).send({
+            success: true,
+            statusCode: 200,
+            body: {
+                text: 'User logged in correctly',
+                user,
+                token
+            }
+        })  
+    })(req, res)
+})
 
-    // Gerando o token (com expiração de 1 dia por boa prática)
-    const token = jwt.sign(payload, "secret", { expiresIn: "1d" });
-
-    // Garantindo que dados sensíveis não vão voltar para o frontend caso existam no objeto
-    delete user.password;
-    delete user.salt;
-
-    // 4. Resposta de sucesso
-    return res.status(200).send({
-      success: true,
-      statusCode: 200,
-      body: {
-        text: "User logged in correctly!!!",
-        user,
-        token,
-        logged: true,
-      },
-    });
-  })(req, res, next); // Passado o 'next' aqui por boa prática do Express
-});
-
-export default authRouter;
+export default authRouter
