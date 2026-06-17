@@ -3,6 +3,7 @@ import cors from "cors";
 import { Mongo } from "./database/mongo.js";
 import { config } from "dotenv";
 import authRouter from "./auth/auth.js";
+import usersRouter from "./routes/users.js";
 
 config();
 
@@ -28,7 +29,10 @@ async function maim() {
       body: "Welcome to MyGastronomy!",
     });
   });
+
+  // Rotas
   app.use("/auth", authRouter);
+  app.use("/users", usersRouter);
 
   app.listen(port, () => {
     console.log(`Server running on http://${hostname}:${port}`);

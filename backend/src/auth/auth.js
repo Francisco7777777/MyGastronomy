@@ -68,7 +68,7 @@ const authRouter = express.Router();
 
 authRouter.post("/signup", async (req, res) => {
   try {
-    // 1. Proteção contra requisições sem body (Evita o crash de undefined)
+    // Proteção contra requisições sem body (Evita o crash de undefined)
     if (!req.body || !req.body.email || !req.body.password) {
       return res.status(400).send({
         success: false,
@@ -86,7 +86,6 @@ authRouter.post("/signup", async (req, res) => {
 
     if (checkUser) {
       return res.status(400).send({
-        // Mudado para 400 (Bad Request) pois 500 é erro interno do servidor
         success: false,
         statusCode: 400,
         body: { text: "User already exists!!!" },
@@ -97,7 +96,7 @@ authRouter.post("/signup", async (req, res) => {
     const salt = crypto.randomBytes(16);
 
     crypto.pbkdf2(
-      password, // CORRIGIDO: de res.body para password (req.body)
+      password,
       salt,
       310000,
       16,
@@ -164,9 +163,8 @@ authRouter.post("/signup", async (req, res) => {
 // Login
 //
 authRouter.post("/login", (req, res, next) => {
-  // CORRIGIDO: Alterado de "login" para "local" para bater com a estratégia registrada
   passport.authenticate("local", { session: false }, (error, user, info) => {
-    // 1. Tratamento de erro do servidor/banco
+    // Tratamento de erro do servidor/banco
     if (error) {
       return res.status(500).send({
         success: false,
@@ -178,7 +176,7 @@ authRouter.post("/login", (req, res, next) => {
       });
     }
 
-    // 2. Se o usuário não foi encontrado ou a senha está errada
+    // Se o usuário não foi encontrado ou a senha está errada
     if (!user) {
       return res.status(401).send({
         // Mudado para 401 (Unauthorized) que é o correto para falha de login
@@ -193,7 +191,7 @@ authRouter.post("/login", (req, res, next) => {
       });
     }
 
-    // 3. CORRIGIDO: Simplificando o payload do JWT para evitar quebra com Objetos complexos do Mongo
+    // Simplificando o payload do JWT para evitar quebra com Objetos complexos do Mongo
     const payload = {
       id: user._id.toString(),
       email: user.email,
@@ -211,7 +209,7 @@ authRouter.post("/login", (req, res, next) => {
       success: true,
       statusCode: 200,
       body: {
-        text: "User logged in correctly!!!", // Corrigido o erro de digitação 'logger'
+        text: "User logged in correctly!!!",
         user,
         token,
         logged: true,
