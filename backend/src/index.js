@@ -2,6 +2,7 @@ import express, { json } from "express";
 import cors from "cors";
 import { Mongo } from "./database/mongo.js";
 import { config } from "dotenv";
+import authRouter from "./auth/auth.js";
 
 config();
 
@@ -27,6 +28,7 @@ async function maim() {
       body: "Welcome to MyGastronomy!",
     });
   });
+  app.use("/auth", authRouter);
 
   app.listen(port, () => {
     console.log(`Server running on http://${hostname}:${port}`);
