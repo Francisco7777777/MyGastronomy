@@ -1,0 +1,3 @@
+react-icons  - Para usar icons.
+material UI  - Para usr conponentes.
+reac-router  - Para as rotas.
