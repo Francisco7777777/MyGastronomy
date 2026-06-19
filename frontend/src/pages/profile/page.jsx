@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import authServices from "../../services/auth";
-//import orderServices from "../../services/order";
+import orderServices from "../../services/order";
 import styles from "./page.module.css";
 import {
   LuLogOut,
@@ -10,7 +10,7 @@ import {
   LuCircleCheckBig,
 } from "react-icons/lu";
 import { Link } from "react-router-dom";
-//import Loading from "../loading/page";
+import Loading from "../loading/page";
 
 export default function Profile() {
   const { logout } = authServices();
