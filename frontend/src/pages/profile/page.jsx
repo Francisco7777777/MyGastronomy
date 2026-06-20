@@ -21,11 +21,11 @@ export default function Profile() {
 
   useEffect(() => {
     if (!authData) {
-      return navigate("/auth");
+      navigate("/auth"); // Apenas executa a função
     } else if (refetchOrders) {
       getUserOrders(authData?.user?._id);
     }
-  }, [authData, refetchOrders]);
+  }, [authData, refetchOrders, navigate]);
 
   if (orderLoading) {
     return <Loading />;
